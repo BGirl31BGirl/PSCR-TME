@@ -1,0 +1,183 @@
+Corrigé de l'exercice  :
+Fichier List.h : 
+#ifndef SRC_LIST_H_
+#define SRC_LIST_H_
+
+#include <cstddef>
+#include <string>
+#include <ostream>
+
+namespace pr {
+
+// Chainon _____________________________________________________________________
+class Chainon {
+public :
+	
+       std::string data;
+	   Chainon * next;
+	
+	Chainon (const std::string & data, Chainon * next=nullptr);
+	size_t length() ;
+	void print (std::ostream & os) const;
+};
+
+// List ________________________________________________________________________
+class List {
+        
+public:
+	Chainon * tete;
+
+	List(): tete(nullptr)  {}
+
+	~List() {
+		for (Chainon * c = tete ; c ; ) {
+			Chainon * tmp = c->next;
+			delete c;
+			c = tmp;
+		}
+	}
+
+	const std::string & operator[] (size_t index) const ;
+
+	void push_back (const std::string& val) ;
+
+	// FAUTE : Fonction push_front deja declaré, on a juste besoin de la signature
+	void push_front (const std::string& val);
+
+	bool empty() ;
+
+	size_t size() const ;
+	
+	// FAUTE : fonction friend
+    friend std::ostream & operator<< (std::ostream & os, const List & vec) ; 
+};
+
+
+
+} /* namespace pr */
+
+#endif /* SRC_LIST_H_ */
+
+
+_____________________________________________________________________________________________________
+Fichier List.cpp :
+//FAUTE : Declaration du header et bibliotheque
+#include "List.h" 
+#include <iostream> 
+
+namespace pr {
+
+// ******************* Chainon
+Chainon::Chainon (const std::string & data, Chainon * next):data(data),next(next) {};
+
+size_t Chainon::length() {
+	size_t len = 1;
+	if (next != nullptr) {
+		len += next->length();
+	}
+	//FAUTE : return len et non la fonction length()
+	return len;
+}
+
+void Chainon::print (std::ostream & os)const { // <- const
+	os << data ;
+	if (next != nullptr) {
+		os << ", ";
+		//FAUTE : next->print(os) dans la condition if car sinon next == nullptr et on ne va pas l'afficher
+		next->print(os);
+	}
+	
+}
+
+// ******************  List
+const std::string & List::operator[] (size_t index) const  {
+	Chainon * it = tete;
+	for (size_t i=0; i < index ; i++) {
+		it = it->next;
+	}
+	return it->data;
+}
+
+void List::push_back (const std::string& val) {
+	if (tete == nullptr) {
+		tete = new Chainon(val);
+	} else {
+		Chainon * fin = tete;
+		while (fin->next) {
+			fin = fin->next;
+		}
+		fin->next = new Chainon(val);
+	}
+}
+
+void List::push_front (const std::string& val) {
+	tete = new Chainon(val,tete);
+}
+
+//FAUTE : Empty est une fonction de la class LIST donc List::empty()
+bool List::empty() { 
+	return tete == nullptr;
+}
+
+size_t List::size() const {
+	if (tete == nullptr) {
+		return 0;
+	} else {
+		return tete->length();
+	}
+}
+
+
+std::ostream & operator<< (std::ostream & os, const pr::List & vec)
+{
+	os << "[";
+	if (vec.tete != nullptr) {
+		vec.tete->print (os) ;
+	}
+	os << "]";
+	return os;
+}
+
+} // namespace pr
+
+
+_____________________________________________________________________________________________________
+Fichier main.cpp :
+#include "List.h"
+#include <string>
+#include <iostream>
+#include <cstring>
+
+int main () {
+
+	std::string abc = "abc";
+	char * str = new char [3];
+	str[0] = 'a';
+	str[1] = 'b';
+	str[2] = 'c';
+	size_t i = 0;
+
+	if (! strcmp (str, abc.c_str())) {
+		std::cout << "Equal !";
+	}
+
+	pr::List list;
+	list.push_front(abc);
+	list.push_front(abc);
+
+	std::cout << "Liste : " << list << std::endl;
+	std::cout << "Taille : " << list.size() << std::endl;
+
+	// Affiche Ã  l'envers
+	//FAUTE : i est de type size_t donc on met i>0 
+	for (i= list.size()  ; i > 0 ; i--) { 
+		std::cout << "elt " << i-1 << ": " << list[i-1] << std::endl;
+	}
+
+	//FAUTE : str est un tableau
+	delete [] str;
+
+}
+
+
+
