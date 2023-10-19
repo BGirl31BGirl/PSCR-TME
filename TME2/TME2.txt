@@ -1,0 +1,350 @@
+Question 1 : Found a total of 566193 words.
+
+________________________________________________________________________________________________________________________________________________________
+
+Question 2 : Nombre de mot different 20333 mots.
+
+#include <iostream>
+#include <fstream>
+#include <regex>
+#include <chrono>
+
+int main () {
+	using namespace std;
+	using namespace std::chrono;
+
+	ifstream input = ifstream("WarAndPeace.txt");
+
+	auto start = steady_clock::now();
+	cout << "Parsing War and Peace" << endl;
+
+	size_t nombre_lu = 0;
+	size_t mots_differents = 0;
+	
+	// prochain mot lu
+	string word;
+	vector<string> mots;
+	// une regex qui reconnait les caractères anormaux (négation des lettres)
+	regex re( R"([^a-zA-Z])");
+	while (input >> word) {
+		// élimine la ponctuation et les caractères spéciaux
+		word = regex_replace ( word, re, "");
+		// passe en lowercase
+		transform(word.begin(),word.end(),word.begin(),::tolower);
+
+		// word est maintenant "tout propre"
+		nombre_lu++;
+
+    //Nombre de mots differents
+		if (find(mots.begin(), mots.end(), word) == mots.end()) {
+            mots.push_back(word);
+            mots_differents++;
+        }
+
+	}
+	input.close();
+
+	cout << "Finished Parsing War and Peace" << endl;
+
+	auto end = steady_clock::now();
+    cout << "Parsing took "
+              << duration_cast<milliseconds>(end - start).count()
+              << "ms.\n";
+
+    cout << "Found a total of " << nombre_lu << " words." << endl;
+
+	cout << "Nombre de mot different " << mots_differents << " mots." << endl;
+
+
+    return 0;
+}
+
+________________________________________________________________________________________________________________________________________________________
+
+Question 3 :  Nombre d'occurence de 'war': 298
+              Nombre d'occurence de 'peace': 114
+
+#include <iostream>
+#include <fstream>
+#include <regex>
+#include <chrono>
+
+int main () {
+	using namespace std;
+	using namespace std::chrono;
+
+	ifstream input = ifstream("WarAndPeace.txt");
+
+	auto start = steady_clock::now();
+	cout << "Parsing War and Peace" << endl;
+
+	size_t nombre_lu = 0;
+	
+	// prochain mot lu
+	string word;
+	vector<pair<string, int>> mots;
+	// une regex qui reconnait les caractères anormaux (négation des lettres)
+	regex re( R"([^a-zA-Z])");
+	while (input >> word) {
+		// élimine la ponctuation et les caractères spéciaux
+		word = regex_replace ( word, re, "");
+		// passe en lowercase
+		transform(word.begin(),word.end(),word.begin(),::tolower);
+
+		// word est maintenant "tout propre"
+		nombre_lu++;
+
+		//Nombre d'occurence d'un mot
+		bool Trouver = false;
+        for (size_t i = 0; i < mots.size(); i++) {
+            if (mots[i].first == word) {
+                mots[i].second++;
+                Trouver = true;
+                break;
+            }
+        }
+        if (!Trouver) {
+            mots.emplace_back(word, 1);
+        }
+
+	}
+	input.close();
+
+	cout << "Finished Parsing War and Peace" << endl;
+
+	auto end = steady_clock::now();
+    cout << "Parsing took "
+              << duration_cast<milliseconds>(end - start).count()
+              << "ms.\n";
+
+    cout << "Found a total of " << nombre_lu << " words." << endl;
+
+	for (const auto &mot : mots) {
+        if (mot.first == "war" || mot.first == "peace" || mot.first == "toto") {
+            cout << "Nombre d'occurence de '" << mot.first << "': " << mot.second << endl;
+        }
+    }
+
+
+    return 0;
+}
+
+________________________________________________________________________________________________________________________________________________________
+
+Question 4 : Complexité O(n) => n est le nombre de mots 
+             Pour l'améliorer, on peut utiliser HashMap 
+
+________________________________________________________________________________________________________________________________________________________
+
+Question 5 :
+
+#ifndef _HASHMAP_
+#define _HASHMAP_
+
+#include <unordered_map>
+
+namespace p{
+
+template <typename K, typename V>
+class HashMap {
+    
+private:
+    std::unordered_map<K, V> map;
+
+public:
+    HashMap() = default;
+
+    void insert(const K& key, const V& value) {
+        map[key] = value;
+    }
+
+    bool contains(const K& key) const {
+        return map.find(key) != map.end();
+    }
+
+    V& get(const K& key) {
+        return map[key];
+    }
+
+    void remove(const K& key) {
+        map.erase(key);
+    }
+
+    size_t size() const {
+        return map.size();
+    }
+
+};
+
+
+    
+}
+
+#endif
+
+________________________________________________________________________________________________________________________________________________________
+
+Question 6 :  Nombre d'occurrences de 'war': 298
+              Nombre d'occurrences de 'peace': 114
+              Nombre d'occurrences de 'toto': 0
+
+#include <iostream>
+#include <fstream>
+#include <regex>
+#include <chrono>
+#include "HashMap.h" 
+
+int main() {
+    using namespace std;
+    using namespace std::chrono;
+	using namespace p;
+	
+
+    ifstream input = ifstream("WarAndPeace.txt");
+
+    auto start = steady_clock::now();
+    cout << "Parsing War and Peace" << endl;
+
+    size_t nombre_lu = 0;
+
+    // Prochain mot lu
+    string word;
+
+    HashMap<string, int> mots; 
+
+    // Une regex qui reconnaît les caractères anormaux (négation des lettres)
+    regex re(R"([^a-zA-Z])");
+
+    while (input >> word) {
+        // Élimine la ponctuation et les caractères spéciaux
+        word = regex_replace(word, re, "");
+        // Passe en minuscules
+        transform(word.begin(), word.end(), word.begin(), ::tolower);
+
+        // Word est maintenant "tout propre"
+        nombre_lu++;
+
+        // Nombre d'occurrence d'un mot
+        int& count = mots.get(word);
+        count++;
+    }
+    input.close();
+
+    cout << "Finished Parsing War and Peace" << endl;
+
+    auto end = steady_clock::now();
+    cout << "Parsing took "
+         << duration_cast<milliseconds>(end - start).count()
+         << "ms.\n";
+
+    cout << "Found a total of " << nombre_lu << " words." << endl;
+
+    // Afficher le nombre d'occurrences des mots "war," "peace," et "toto"
+    cout << "Nombre d'occurrences de 'war': " << mots.get("war") << endl;
+    cout << "Nombre d'occurrences de 'peace': " << mots.get("peace") << endl;
+    cout << "Nombre d'occurrences de 'toto': " << mots.get("toto") << endl;
+
+    return 0;
+}
+
+________________________________________________________________________________________________________________________________________________________
+
+Question 7 : 
+
+-> Ajouter dans HashMap.h : 
+public :
+std::vector<std::pair<K, V>> Copy() const {
+        std::vector<std::pair<K, V>> v;
+        for (const auto& m : map) {
+            v.emplace_back(m.first, m.second);
+        }
+        return entries;
+    }
+
+________________________________________________________________________________________________________________________________________________________
+
+Question 8 :  Mot : the, Occurrences : 34562
+              Mot : and, Occurrences : 22148
+              Mot : to, Occurrences : 16709
+              Mot : of, Occurrences : 14990
+              Mot : a, Occurrences : 10513
+              Mot : he, Occurrences : 9809
+              Mot : in, Occurrences : 8800
+              Mot : his, Occurrences : 7965
+              Mot : that, Occurrences : 7806
+              Mot : was, Occurrences : 7327
+
+#include <iostream>
+#include <fstream>
+#include <regex>
+#include <chrono>
+#include "HashMap.h" 
+
+int main() {
+    using namespace std;
+    using namespace std::chrono;
+	using namespace p;
+	
+
+    ifstream input = ifstream("WarAndPeace.txt");
+
+    auto start = steady_clock::now();
+    cout << "Parsing War and Peace" << endl;
+
+    size_t nombre_lu = 0;
+
+    // Prochain mot lu
+    string word;
+
+    HashMap<string, int> mots; 
+
+    // Une regex qui reconnaît les caractères anormaux (négation des lettres)
+    regex re(R"([^a-zA-Z])");
+
+    while (input >> word) {
+        // Élimine la ponctuation et les caractères spéciaux
+        word = regex_replace(word, re, "");
+        // Passe en minuscules
+        transform(word.begin(), word.end(), word.begin(), ::tolower);
+
+        // Word est maintenant "tout propre"
+        nombre_lu++;
+
+        // Nombre d'occurrence d'un mot
+        int& count = mots.get(word);
+        count++;
+    }
+    input.close();
+
+    cout << "Finished Parsing War and Peace" << endl;
+
+    auto end = steady_clock::now();
+    cout << "Parsing took "
+         << duration_cast<milliseconds>(end - start).count()
+         << "ms.\n";
+
+    cout << "Found a total of " << nombre_lu << " words." << endl;
+
+    // Afficher le nombre d'occurrences des mots "war," "peace," et "toto"
+    cout << "Nombre d'occurrences de 'war': " << mots.get("war") << endl;
+    cout << "Nombre d'occurrences de 'peace': " << mots.get("peace") << endl;
+    cout << "Nombre d'occurrences de 'toto': " << mots.get("toto") << endl;
+
+  	//Vector
+  	vector<pair<string, int>> entries = mots.Copy();
+
+    //Sort()
+    std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
+        return a.second > b.second;
+    });
+
+    //Affiche 10 premier mots
+    for (int i = 0; i < 10 ; i++) {
+        cout << "Mot : " << entries[i].first << ", Occurrences : " << entries[i].second << endl;
+    }
+
+    return 0;
+}
+
+
+
