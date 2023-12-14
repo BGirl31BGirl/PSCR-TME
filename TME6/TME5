@@ -1,0 +1,221 @@
+Question 2 : 
+#include <iostream>
+#include <unistd.h>
+#include <sys/wait.h>
+
+int main() {
+    const int N = 3;
+    int nbrFils=0;
+    
+    std::cout << "Debut du Processus Main pid=" << getpid() << std::endl;
+
+    for (int i = 1, j = N; i <= N && j == N && fork() == 0; i++) {
+        std::cout << " i:j " << i << ":" << j << std::endl;
+        for (int k = 1; k <= i && j == N; k++) {
+            if (fork() == 0) {
+                nbrFils = 0;
+                j = 0;
+                std::cout << " k:j " << k << ":" << j << std::endl;
+            }else{
+                nbrFils++;
+            }
+        }
+    }
+    
+    for(int i=0; i<nbrFils; i++){
+        int status;
+        int pid = wait(&status);
+        std::cout << "detection par " << getpid() << " de fin du fils de pid=" << pid << std::endl;
+    }
+    
+    std::cout<<"Fin du Processus Main Pid "<<getpid()<<std::endl;
+
+    return 0;
+}
+
+Question 3 :
+#include <iostream>
+#include <unistd.h>
+#include <signal.h>
+#include <cstdlib>
+#include <ctime>
+#include <csignal>
+
+using namespace std;
+
+int PV = 3;
+
+void getPV(int){
+    PV--;
+    cout << "Points de vie restants : " << PV <<" au Processus : "<<getpid()<< endl;
+
+    if (PV == 0) {
+        cout << "Le processus "<<getpid()<< " se termine." << endl;
+        exit(1);
+    }
+}
+
+void attaque (pid_t adversaire){
+    signal(SIGINT, getPV);
+    if (kill(adversaire, SIGINT) != 0) {
+        cout << "L'adversaire "<<getpid()<< " est déjà vaincu." << endl;
+        exit(0);
+    }
+    usleep((rand() % 700 + 300) * 1000);
+}
+
+void defense(){
+    signal(SIGINT, SIG_IGN);
+    usleep((rand() % 700 + 300) * 1000);
+}
+
+void combat(pid_t adversaire){
+    while(true){
+        cout << "Phase de défense "<<getpid()<< endl;
+        defense();
+        cout << "Phase d'attaque "<<getpid()<< endl;
+        attaque(adversaire);
+    }
+}
+
+int main() {
+    
+    pid_t lukePid = fork();
+
+    if (lukePid == 0) {
+        // Processus fils (Luke)
+        cout << "Fils : "<<getpid()<<endl;
+        combat(getppid()); 
+    } else if (lukePid > 0) {
+        // Processus parent (Vador)
+        cout << "Pere : "<<getpid()<<endl;
+        combat(lukePid);
+    } else {
+        cout << "Erreur lors de la création du processus fils." << endl;
+    }
+    return 0;
+}
+
+Question 4 :
+Cette fonction réalise une pause aléatoire entre 0.3 et 1 seconde en utilisant la fonction nanosleep. La boucle while garantit que la pause se poursuit jusqu'à ce que la durée totale spécifiée soit écoulée, même si elle est interrompue par un signal.
+
+Question 5/6:
+#include <iostream>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <ctime>
+#include <cstdlib>
+
+using namespace std;
+
+int PV = 3;
+
+void randsleep() {
+  int r = rand();
+  double ratio = (double)r / (double) RAND_MAX;
+  struct timespec tosleep;
+  tosleep.tv_sec =0;
+  // 300 millions de ns = 0.3 secondes
+  tosleep.tv_nsec = 300000000 + ratio*700000000;
+  struct timespec remain;
+  while ( nanosleep(&tosleep, &remain) != 0) {
+    tosleep = remain;
+  }
+}
+
+void sig_hand(int sig){
+    PV--;
+    cout<<getpid()<<" lui reste "<<PV<<" Points de Vie !"<<endl;
+    
+    if(PV==0){
+        cout<<getpid()<<" se Termine ..."<<endl;
+        exit(1);
+    }
+}
+
+void defense(){
+    struct sigaction action;
+    action.sa_handler = SIG_IGN;
+    sigaction(SIGINT, &action, NULL);
+}
+
+void attaque (pid_t adversaire){
+    struct sigaction action;
+    action.sa_handler = &sig_hand;
+    sigaction(SIGINT, &action, NULL);
+    
+    if(kill (adversaire, SIGINT)!=0){
+        cout<<"L'adversaire "<<adversaire<< " a perdu ! "<<endl;
+        exit(0);
+    }
+
+    
+    randsleep();
+}
+
+void combat(pid_t adversaire){
+    while(true){
+        defense();
+        attaque(adversaire);
+    }
+}
+
+int main()
+{
+    pid_t fils = fork();
+    if(fils ==0)
+    {
+        combat(getppid());
+    }else{
+        cout<<"Pere "<<getpid()<<endl;
+        cout<<"FILS "<<fils<<endl;
+        combat(fils);
+    }
+
+    return 0;
+}
+
+Question 7 :
+pid_t wait_till_pid(pid_t pid) {
+    while (true) {
+        pid_t p = wait(nullptr);
+        if (p==-1 || p == pid) 
+            return p;
+    }
+}
+
+Question 8 :
+pid_t wait_till_pid(pid_t pid, int sec) {
+    static bool timeout = false;
+    signal(SIGALRM, [](int) {
+        std::cout << "received SIGALRM" << std::endl;
+        timeout = true;
+    });
+    signal(SIGCHLD, [](int) {
+        std::cout << "received SIGCHLD" << std::endl;
+    });
+    alarm(sec);
+
+    sigset_t set;
+    sigfillset(&set);
+    sigdelset(&set, SIGALRM);
+    sigdelset(&set, SIGCHLD);
+
+    while (true) {
+        std::cout << "waiting..." << std::endl;
+        sigsuspend(&set);
+        if (timeout) {
+            std::cout << "Alarm wins" << std::endl;
+            return -1;
+        } else {
+            pid_t p = wait(nullptr);
+            std::cout << "wait answered " << p << std::endl;
+            if (p == pid) {
+                alarm(0);
+            }
+            if (p == -1 || p == pid) {
+                return p;
+            }
+        }
+    }
+}
