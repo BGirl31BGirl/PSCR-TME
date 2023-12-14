@@ -1,0 +1,116 @@
+1/Fork, Exec, Pipe  ________________________________________________________
+
+2/ Sémaphore, Mémoire Partagée ________________________________________________________
+Question 1 et 2 :
+#include <iostream>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include "Stack_cor.h"
+#include <vector>
+
+using namespace std;
+using namespace pr;
+
+void producteur(Stack<char> *stack) {
+    char c;
+    while (cin >> c) {
+        stack->push(c);
+    }
+}
+
+void consomateur(Stack<char> *stack) {
+    while (true) {
+        char c = stack->pop();
+        cout << c << std::flush;
+    }
+}
+
+std::vector<pid_t> tokill;
+
+void killem(int) {
+    for (auto p : tokill) {
+        kill(p, SIGINT);
+    }
+}
+
+int main() {
+    int const N=4;
+    int const M=5;
+
+    int numProducers = N; // Nombre de producteurs
+    int numConsumers = M; // Nombre de consommateurs
+
+    size_t shmsize = sizeof(Stack<char>);
+    std::cout << "Allocating segment size " << shmsize << std::endl;
+
+    int fd;
+    void *addr;
+
+        fd = shm_open("/myshm", O_CREAT | O_EXCL | O_RDWR, 0666);
+        if (fd < 0) {
+            perror("shm_open");
+            return 1;
+        }
+        if (ftruncate(fd, shmsize) != 0) {
+            perror("ftruncate");
+            return 1;
+        }
+        addr = mmap(nullptr, shmsize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        if (addr == MAP_FAILED) {
+            perror("mmap anonymous");
+            exit(1);
+        }
+    
+
+    Stack<char> *s = new (addr) Stack<char>();
+
+    // Créer des producteurs
+    for (int i = 0; i < numProducers; ++i) {
+        pid_t pid = fork();
+        if (pid == 0) {
+            producteur(s);
+            return 0;
+        } else {
+            tokill.push_back(pid);
+        }
+    }
+
+    // Créer des consommateurs
+    for (int i = 0; i < numConsumers; ++i) {
+        pid_t pid = fork();
+        if (pid == 0) {
+            consomateur(s);
+            return 0;
+        } else {
+            tokill.push_back(pid);
+        }
+    }
+
+    // Gestionnaire de signal pour tuer les processus enfants à la fin
+    signal(SIGINT, killem);
+
+    // Attendre la terminaison de tous les producteurs et consommateurs
+    for (i=0; i<(numConsumers+numProducers); ++i) 
+        wait(0);
+    
+
+    // Invoquer le destructeur
+    s->~Stack();
+    if (munmap(addr, shmsize) != 0) {
+        perror("munmap");
+        exit(1);
+    }
+
+    if (shm_unlink("/myshm") != 0) {
+            perror("sem unlink");
+    }
+    
+
+    return 0;
+}
+
+3/ Messagerie par Mémoire Partagée ________________________________________________________
+
