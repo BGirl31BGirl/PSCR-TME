@@ -1,0 +1,649 @@
+Question 1 :
+#include <iostream>
+#include<thread>
+#include<mutex>
+#include<vector>
+using namespace std;
+
+//________________________________________________________Compte_________________________________________________
+class Compte {
+    mutable mutex m;
+    int solde;
+    
+    public :
+    Compte(int solde=0):solde(solde) {}
+    
+    void crediter (unsigned int val) {
+        unique_lock<mutex> g(m);
+        solde+=val ;
+    }
+    
+    bool debiter (unsigned int val) {
+        unique_lock<mutex> g(m);
+        bool doit = solde >= val;
+        if (doit) {
+            solde-=val ;
+        }
+        return doit;
+    }
+    
+    int getSolde() const {
+        unique_lock<mutex> g(m);
+        return solde;
+    }
+    
+    // NB : vector exige Copyable, mais mutex ne l’est pas...
+    Compte(const Compte & other) {
+        other.m.lock();
+        solde = other.solde;
+        other.m.unlock();
+    }
+};
+
+//________________________________________________________Banque________________________________________________
+class Banque {
+    typedef vector<Compte> comptes_t;
+    comptes_t comptes;
+    
+    public :
+    Banque (size_t ncomptes, size_t solde) : comptes (ncomptes, Compte(solde)){}
+    
+    void transfert(size_t deb, size_t cred, unsigned int val) {
+        Compte & debiteur = comptes[deb];
+        Compte & crediteur = comptes[cred];
+        if (debiteur.debiter(val)) {
+            crediteur.crediter(val);
+        }
+    }
+    
+    size_t size() const {
+        return comptes.size();
+    }
+};
+
+//_________________________________________________________Fonction_________________________________________
+void transaction(int index, Banque &b)
+{
+    for(int k=1; k<1000; k++)
+    {
+        int i = rand() % b.size();
+        int j = rand() % b.size();
+        int val = rand() % 100 + 1 ;  
+        b.transfert(i,j,val);
+        this_thread::sleep_for(chrono::milliseconds(rand()%20));
+    }
+    
+}
+
+//_________________________________________________________Main_________________________________________
+
+const int N=10;
+int main()
+{
+    vector<thread> t;
+    t.reserve(N);
+    Banque b(200,100);
+    
+    for(int k=0; k<N; k++)
+        t.emplace_back(transaction, k, std::ref(b));
+    
+    for(int k=0; k<N; k++)
+        t[k].join();
+    
+
+    return 0;
+}
+
+
+Question 2 : 
+Oui le comortement est correct grace à mutex.
+
+Question 3 et 4 :
+#include <iostream>
+#include<thread>
+#include<mutex>
+#include<vector>
+using namespace std;
+
+//________________________________________________________Compte_________________________________________________
+class Compte {
+    mutable mutex m;
+    int solde;
+    
+    public :
+    Compte(int solde=0):solde(solde) {}
+    
+    void crediter (unsigned int val) {
+        unique_lock<mutex> g(m);
+        solde+=val ;
+    }
+    
+    bool debiter (unsigned int val) {
+        unique_lock<mutex> g(m);
+        bool doit = solde >= val;
+        if (doit) {
+            solde-=val ;
+        }
+        return doit;
+    }
+    
+    int getSolde() const {
+        unique_lock<mutex> g(m);
+        return solde;
+    }
+    
+    // NB : vector exige Copyable, mais mutex ne l’est pas...
+    Compte(const Compte & other) {
+        other.m.lock();
+        solde = other.solde;
+        other.m.unlock();
+    }
+    
+    // Lock
+     void lock() const{
+        m.lock();
+    }
+    
+    //Unlock
+    void unlock() const{
+        m.unlock();
+    }
+    
+    //Try_Lock
+    bool try_lock(){
+        return m.try_lock();
+    } 
+};
+
+//________________________________________________________Banque________________________________________________
+class Banque {
+    typedef vector<Compte> comptes_t;
+    comptes_t comptes;
+    
+    public :
+    Banque (size_t ncomptes, size_t solde) : comptes (ncomptes, Compte(solde)){}
+    
+    void transfert(size_t deb, size_t cred, unsigned int val) {
+        Compte & debiteur = comptes[deb];
+        debiteur.lock();
+        
+        Compte & crediteur = comptes[cred];
+        crediteur.lock();
+        
+        if (debiteur.debiter(val)) {
+            crediteur.crediter(val);
+        }
+        
+        debiteur.unlock();
+        crediteur.unlock();
+    }
+    
+    size_t size() const {
+        return comptes.size();
+    }
+    
+};
+
+//_________________________________________________________Fonction_________________________________________
+void transaction(int index, Banque &b)
+{
+    for(int k=1; k<1000; k++)
+    {
+        int i = rand() % b.size();
+        int j = rand() % b.size();
+        int val = rand() % 100 + 1 ;  
+        b.transfert(i,j,val);
+        this_thread::sleep_for(chrono::milliseconds(rand()%20));
+    }
+    
+}
+
+//_________________________________________________________Main_________________________________________
+
+const int N=10;
+int main()
+{
+    vector<thread> t;
+    t.reserve(N);
+    Banque b(200,100);
+    
+    for(int k=0; k<N; k++)
+        t.emplace_back(transaction, k, std::ref(b));
+    
+    for(int k=0; k<N; k++)
+        t[k].join();
+    
+
+    return 0;
+}
+
+
+Question 5 :
+La raison du blocage du programme est qu'il y a une redondance dans l'appel des verrous `lock()` à l'intérieur de la fonction `debiter` et de la fonction `transfert`, ce qui peut entraîner une tentative de verrouillage multiple sur les mêmes verrous, créant ainsi une possibilité de deadlock.
+
+Question 6 :
+Problème de deadlock persistant survient parfois lorsque plusieurs threads tentent de transférer des fonds entre les mêmes comptes, ce qui nécessite une stratégie d'ordonnancement des verrous pour éviter ce problème.
+
+#include <iostream>
+#include<thread>
+#include<mutex>
+#include<vector>
+using namespace std;
+
+//________________________________________________________Compte_________________________________________________
+class Compte {
+    mutable recursive_mutex m;
+    int solde;
+    
+    public :
+    Compte(int solde=0):solde(solde) {}
+    
+    void crediter (unsigned int val) {
+        unique_lock<recursive_mutex> g(m);
+        solde+=val ;
+    }
+    
+    bool debiter (unsigned int val) {
+        unique_lock<recursive_mutex> g(m);
+        bool doit = solde >= val;
+        if (doit) {
+            solde-=val ;
+        }
+        return doit;
+    }
+    
+    int getSolde() const {
+        unique_lock<recursive_mutex> g(m);
+        return solde;
+    }
+    
+    // NB : vector exige Copyable, mais mutex ne l’est pas...
+    Compte(const Compte & other) {
+        other.m.lock();
+        solde = other.solde;
+        other.m.unlock();
+    }
+    
+    // Lock
+     void lock() const{
+        m.lock();
+    }
+    
+    //Unlock
+    void unlock() const{
+        m.unlock();
+    }
+    
+    //Try_Lock
+    bool try_lock(){
+        return m.try_lock();
+    } 
+};
+
+//________________________________________________________Banque________________________________________________
+class Banque {
+    typedef vector<Compte> comptes_t;
+    comptes_t comptes;
+    
+    public :
+    Banque (size_t ncomptes, size_t solde) : comptes (ncomptes, Compte(solde)){}
+    
+    void transfert(size_t deb, size_t cred, unsigned int val) {
+        Compte & debiteur = comptes[deb];
+        Compte & crediteur = comptes[cred];
+    
+        if(deb<cred)
+        {
+            debiteur.lock();
+            crediteur.lock();
+        }else{
+            crediteur.lock();
+            debiteur.lock();
+        }
+        
+        if (debiteur.debiter(val)) {
+            crediteur.crediter(val);
+        }
+        
+        debiteur.unlock();
+        crediteur.unlock();
+    }
+    
+    size_t size() const {
+        return comptes.size();
+    }
+    
+};
+
+//_________________________________________________________Fonction_________________________________________
+void transaction(int index, Banque &b)
+{
+    for(int k=1; k<1000; k++)
+    {
+        int i = rand() % b.size();
+        int j = rand() % b.size();
+        int val = rand() % 100 + 1 ;  
+        b.transfert(i,j,val);
+        this_thread::sleep_for(chrono::milliseconds(rand()%20));
+    }
+    
+}
+
+//_________________________________________________________Main_________________________________________
+
+const int N=10;
+int main()
+{
+    vector<thread> t;
+    t.reserve(N);
+    Banque b(200,100);
+    
+    for(int k=0; k<N; k++)
+        t.emplace_back(transaction, k, std::ref(b));
+    
+    for(int k=0; k<N; k++)
+        t[k].join();
+    
+
+    return 0;
+}
+
+Question 7 et 8 :
+Non, car le thread comptable peut accéder aux soldes des comptes simultanément avec d'autres threads de transfert, entraînant des lectures concurrentes et des résultats incohérents.
+
+Question 9:
+#include <iostream>
+#include<thread>
+#include<mutex>
+#include<vector>
+using namespace std;
+
+//________________________________________________________Compte_________________________________________________
+class Compte {
+    mutable recursive_mutex m;
+    int solde;
+    
+    public :
+    Compte(int solde=0):solde(solde) {}
+    
+    void crediter (unsigned int val) {
+        unique_lock<recursive_mutex> g(m);
+        solde+=val ;
+    }
+    
+    bool debiter (unsigned int val) {
+        unique_lock<recursive_mutex> g(m);
+        bool doit = solde >= val;
+        if (doit) {
+            solde-=val ;
+        }
+        return doit;
+    }
+    
+    int getSolde() const {
+        unique_lock<recursive_mutex> g(m);
+        return solde;
+    }
+    
+    // NB : vector exige Copyable, mais mutex ne l’est pas...
+    Compte(const Compte & other) {
+        other.m.lock();
+        solde = other.solde;
+        other.m.unlock();
+    }
+    
+    // Lock
+     void lock() const{
+        m.lock();
+    }
+    
+    //Unlock
+    void unlock() const{
+        m.unlock();
+    }
+    
+    //Try_Lock
+    bool try_lock(){
+        return m.try_lock();
+    } 
+};
+
+//________________________________________________________Banque________________________________________________
+class Banque {
+    typedef vector<Compte> comptes_t;
+    comptes_t comptes;
+    mutable mutex m;
+    
+    public :
+    Banque (size_t ncomptes, size_t solde) : comptes (ncomptes, Compte(solde)){}
+    
+    void transfert(size_t deb, size_t cred, unsigned int val) {
+        unique_lock<mutex> l(m);
+        Compte & debiteur = comptes[deb];
+        Compte & crediteur = comptes[cred];
+    
+        if(deb<cred)
+        {
+            debiteur.lock();
+            crediteur.lock();
+        }else{
+            crediteur.lock();
+            debiteur.lock();
+        }
+        
+        if (debiteur.debiter(val)) {
+            crediteur.crediter(val);
+        }
+        
+        debiteur.unlock();
+        crediteur.unlock();
+    }
+    
+    size_t size() const {
+        return comptes.size();
+    }
+    
+    bool comptabiliser (int attendu) const {
+        unique_lock<mutex> l(m); 
+        int bilan = 0;
+        int id = 0;
+        for (const auto & compte : comptes) {
+            if (compte.getSolde() < 0) {
+                cout << "Compte " << id << " en négatif : " << compte.getSolde() <<
+                endl;
+            }
+            bilan += compte.getSolde();
+            id++;
+        }
+        
+        if (bilan != attendu) {
+            cout << "Bilan comptable faux : attendu " << attendu << " obtenu : " <<bilan << endl;
+        }
+        
+        return bilan == attendu;
+}
+
+};
+
+//_________________________________________________________Fonction_________________________________________
+void transaction(int index, Banque &b)
+{
+    for(int k=1; k<1000; k++)
+    {
+        int i = rand() % b.size();
+        int j = rand() % b.size();
+        int val = rand() % 100 + 1 ;  
+        b.transfert(i,j,val);
+        this_thread::sleep_for(chrono::milliseconds(rand()%20));
+    }
+    
+}
+
+//_________________________________________________________Main_________________________________________
+
+const int N=10;
+int main()
+{
+    vector<thread> t;
+    t.reserve(N);
+    Banque b(200,100);
+    
+    for(int k=0; k<N; k++)
+        t.emplace_back(transaction, k, std::ref(b));
+    
+    for(int k=0; k<N; k++)
+        t[k].join();
+    
+
+    return 0;
+}
+
+Question 10 :
+#include <iostream>
+#include<thread>
+#include<mutex>
+#include<vector>
+using namespace std;
+
+//________________________________________________________Compte_________________________________________________
+class Compte {
+    mutable recursive_mutex m;
+    int solde;
+    
+    public :
+    Compte(int solde=0):solde(solde) {}
+    
+    void crediter (unsigned int val) {
+        unique_lock<recursive_mutex> g(m);
+        solde+=val ;
+    }
+    
+    bool debiter (unsigned int val) {
+        unique_lock<recursive_mutex> g(m);
+        bool doit = solde >= val;
+        if (doit) {
+            solde-=val ;
+        }
+        return doit;
+    }
+    
+    int getSolde() const {
+        unique_lock<recursive_mutex> g(m);
+        return solde;
+    }
+    
+    // NB : vector exige Copyable, mais mutex ne l’est pas...
+    Compte(const Compte & other) {
+        other.m.lock();
+        solde = other.solde;
+        other.m.unlock();
+    }
+    
+    // Lock
+     void lock() const{
+        m.lock();
+    }
+    
+    //Unlock
+    void unlock() const{
+        m.unlock();
+    }
+    
+    //Try_Lock
+    bool try_lock(){
+        return m.try_lock();
+    } 
+};
+
+//________________________________________________________Banque________________________________________________
+class Banque {
+    typedef vector<Compte> comptes_t;
+    comptes_t comptes;
+    mutable mutex m;
+    
+    public :
+    Banque (size_t ncomptes, size_t solde) : comptes (ncomptes, Compte(solde)){}
+    
+    void transfert(size_t deb, size_t cred, unsigned int val) {
+        unique_lock<mutex> l(m);
+        Compte & debiteur = comptes[deb];
+        Compte & crediteur = comptes[cred];
+    
+        if(deb<cred)
+        {
+            debiteur.lock();
+            crediteur.lock();
+        }else{
+            crediteur.lock();
+            debiteur.lock();
+        }
+        
+        if (debiteur.debiter(val)) {
+            crediteur.crediter(val);
+        }
+        
+        debiteur.unlock();
+        crediteur.unlock();
+    }
+    
+    size_t size() const {
+        return comptes.size();
+    }
+    
+    bool comptabiliser (int attendu) const {
+        int bilan = 0;
+        int id = 0;
+        for (const auto & compte : comptes) {
+            compte.lock();
+            if (compte.getSolde() < 0) {
+                cout << "Compte " << id << " en négatif : " << compte.getSolde() <<
+                endl;
+            }
+            bilan += compte.getSolde();
+            id++;
+        }
+        
+        for (const auto & compte : comptes)
+            compte.unlock();
+        
+        if (bilan != attendu) {
+            cout << "Bilan comptable faux : attendu " << attendu << " obtenu : " <<bilan << endl;
+        }
+        
+        return bilan == attendu;
+}
+
+};
+
+//_________________________________________________________Fonction_________________________________________
+void transaction(int index, Banque &b)
+{
+    for(int k=1; k<1000; k++)
+    {
+        int i = rand() % b.size();
+        int j = rand() % b.size();
+        int val = rand() % 100 + 1 ;  
+        b.transfert(i,j,val);
+        this_thread::sleep_for(chrono::milliseconds(rand()%20));
+    }
+    
+}
+
+//_________________________________________________________Main_________________________________________
+
+const int N=10;
+int main()
+{
+    vector<thread> t;
+    t.reserve(N);
+    Banque b(200,100);
+    
+    for(int k=0; k<N; k++)
+        t.emplace_back(transaction, k, std::ref(b));
+    
+    for(int k=0; k<N; k++)
+        t[k].join();
+    
+
+    return 0;
+}
